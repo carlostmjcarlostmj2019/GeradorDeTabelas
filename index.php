@@ -1,3 +1,7 @@
+<?php
+require_once('tabelas_functions.php');
+?>
+
 <!DOCTYPE html>
 <html lang="en">
 
@@ -31,6 +35,10 @@
         .btn {
             margin-top: 10px;
         }
+
+        #nomeBancoContainer {
+            display: none;
+        }
     </style>
 </head>
 
@@ -42,104 +50,78 @@
         <?php
         if ($_SERVER["REQUEST_METHOD"] === "POST") {
             $nomeTabela = preg_replace('/[^a-zA-Z0-9_]/', '', $_POST['nome']);
+            $nomeBanco = preg_replace('/[^a-zA-Z0-9_]/', '', $_POST['nome_banco']);
 
-            if (empty($nomeTabela)) {
-                echo "Nome de tabela inválido.";
+            if (empty($nomeTabela) || (isset($_POST['tipo_arquivo']) && $_POST['tipo_arquivo'] === 'python' && empty($nomeBanco))) {
+                echo "Nome de tabela ou banco inválido.";
                 exit;
             }
 
-            $diretorio = "./geradores/";
+            $diretorio = "./tabelas/";
 
             if (!file_exists($diretorio)) {
                 mkdir($diretorio, 0777, true);
             }
 
+            $tiposArquivos = array(
+                'php' => 'php',
+                'sql' => 'sql',
+                'python' => 'py',
+            );
+
             $tipoArquivo = isset($_POST['tipo_arquivo']) ? $_POST['tipo_arquivo'] : '';
-            $extensao = ($tipoArquivo === 'php') ? 'php' : 'sql';
+            $extensao = isset($tiposArquivos[$tipoArquivo]) ? $tiposArquivos[$tipoArquivo] : '';
 
             $conteudoArquivo = "";
 
-            if ($tipoArquivo === 'php') {
-                $conteudoArquivo .= "<?php\n\n";
-                $conteudoArquivo .= "\$campos = array(\n";
+        
 
-                if (isset($_POST['campos']) && isset($_POST['tipos'])) {
-                    $campos = $_POST['campos'];
-                    $tipos = $_POST['tipos'];
-                    $nullos = isset($_POST['nullos']) ? $_POST['nullos'] : [];
+			if ($tipoArquivo === 'php') {
+				$conteudoArquivo .= gerarConteudoPHP($_POST['campos'], $_POST['tipos'], isset($_POST['nullos']) ? $_POST['nullos'] : [], $nomeTabela);
+			} elseif ($tipoArquivo === 'sql') {
+				$conteudoArquivo .= gerarConteudoSQL($_POST['campos'], $_POST['tipos'], isset($_POST['nullos']) ? $_POST['nullos'] : [], $nomeTabela);
+			} elseif ($tipoArquivo === 'python') {
+				$conteudoArquivo .= gerarConteudoPython($_POST['campos'], $_POST['tipos'], isset($_POST['nullos']) ? $_POST['nullos'] : [], $nomeTabela, $nomeBanco);
+			}
 
-                    for ($i = 0; $i < count($campos); $i++) {
-                        $campo = $campos[$i];
-                        $tipo = $tipos[$i];
-                        $nullable = in_array($i, $nullos) ? ' NULL' : '';
-
-                        $conteudoArquivo .= "    '{$campo} {$tipo}{$nullable}',\n";
-                    }
-                }
-
-                // Adiciona automaticamente os campos de timestamp
-                $conteudoArquivo .= "    'data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP',\n";
-                $conteudoArquivo .= "    'data_atualizacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP'\n";
-
-                $conteudoArquivo .= ");\n\n";
-                $conteudoArquivo .= "// SQL para criar a tabela\n";
-                $conteudoArquivo .= "\$sqlCreateTable = \"CREATE TABLE IF NOT EXISTS $nomeTabela (\" . implode(', ', \$campos) . \")\";\n\n";
-                $conteudoArquivo .= "// Executamos a query\n";
-                $conteudoArquivo .= "if (\$conexao->query(\$sqlCreateTable) === TRUE) {\n";
-                $conteudoArquivo .= "    echo \"Tabela $nomeTabela criada com sucesso!\\n\";\n";
-                $conteudoArquivo .= "} else {\n";
-                $conteudoArquivo .= "    echo \"Erro ao criar tabela: \" . \$conexao->error . \"\\n\";\n";
-                $conteudoArquivo .= "}\n";
-                $conteudoArquivo .= "?>";
-            } elseif ($tipoArquivo === 'sql') {
-                $conteudoArquivo .= "-- SQL para criar a tabela\n";
-                $conteudoArquivo .= "CREATE TABLE IF NOT EXISTS $nomeTabela (\n";
-
-                if (isset($_POST['campos']) && isset($_POST['tipos'])) {
-                    $campos = $_POST['campos'];
-                    $tipos = $_POST['tipos'];
-                    $nullos = isset($_POST['nullos']) ? $_POST['nullos'] : [];
-
-                    for ($i = 0; $i < count($campos); $i++) {
-                        $campo = $campos[$i];
-                        $tipo = $tipos[$i];
-                        $nullable = in_array($i, $nullos) ? ' NULL' : '';
-
-                        $conteudoArquivo .= "    {$campo} {$tipo}{$nullable},\n";
-                    }
-                }
-
-                // Adiciona automaticamente os campos de timestamp
-                $conteudoArquivo .= "    data_criacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP,\n";
-                $conteudoArquivo .= "    data_atualizacao TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP\n";
-
-                $conteudoArquivo .= ");";
-            }
 
             $nomeArquivo = "{$diretorio}{$nomeTabela}.{$extensao}";
 
-            if (file_put_contents($nomeArquivo, $conteudoArquivo) !== false) {
-                echo "Arquivo gerado com sucesso: $nomeArquivo";
-                echo "Abrir arquivo na pasta <abrir>";
-            } else {
-                echo "Erro ao salvar o arquivo.";
-            }
+         if (file_put_contents($nomeArquivo, $conteudoArquivo) !== false) {
+			$diretorioArquivo = dirname($nomeArquivo);
+			echo "<div class='alert alert-success'>Arquivo gerado com sucesso!</div>";
+			echo "<p>Abra o arquivo na pasta: <a href='$diretorioArquivo' target='_blank'>$diretorioArquivo</a></p>";
+		} else {
+			echo "<div class='alert alert-danger'>Erro ao salvar o arquivo.</div>";
+		}
+
+
+
         }
         ?>
 
         <form action="" method="post">
+		
+			 <div class="form-group">
+                <label for="tipoArquivo">Tipo de Arquivo:</label>
+                <select class="form-control" name="tipo_arquivo" id="tipoArquivo" required>
+                    <option value="php">PHP</option>
+                    <option value="sql">SQL</option>
+                    <option value="python">Python</option>
+                </select>
+            </div>
+			
             <div class="form-group">
                 <label for="nomeTabela">Nome da Tabela:</label>
                 <input type="text" class="form-control" id="nomeTabela" name="nome" required>
             </div>
 
-            <div class="form-group">
-                <label for="tipoArquivo">Tipo de Arquivo:</label>
-                <select class="form-control" name="tipo_arquivo" required>
-                    <option value="php">PHP</option>
-                    <option value="sql">SQL</option>
-                </select>
+            <div class="form-group" id="nomeBancoContainer">
+                <label for="nomeBanco">Nome do Banco:</label>
+                <input type="text" class="form-control" id="nomeBanco" name="nome_banco">
             </div>
+
+           
 
             <div id="camposContainer">
                 <div class="form-group">
@@ -150,23 +132,7 @@
                         </div>
                         <div class="col">
                             <label for="tipos">Tipo:</label>
-                            <select class="form-control" name="tipos[]" required>
-                                <option value="INT">INT</option>
-                                <option value="INT PRIMARY KEY">INT PRIMARY KEY</option>
-                                <option value="VARCHAR(255)">VARCHAR(255)</option>
-                                <option value="TEXT">TEXT</option>
-                                <option value="DATE">DATE</option>
-                                <option value="DATETIME">DATETIME</option>
-                                <option value="FLOAT">FLOAT</option>
-                                <option value="DOUBLE">DOUBLE</option>
-                                <option value="DECIMAL">DECIMAL</option>
-                                <option value="BOOL">BOOL</option>
-                                <option value="TINYINT">TINYINT</option>
-                                <option value="SMALLINT">SMALLINT</option>
-                                <option value="MEDIUMINT">MEDIUMINT</option>
-                                <option value="BIGINT">BIGINT</option>
-                                <option value="ENUM('value1', 'value2', ...)">ENUM</option>
-                            </select>
+                            <?php echo SelectOptions('tipos[]'); ?>
                         </div>
                         <div class="col">
                             <label for="nullos">Vazio:    </label>
@@ -199,23 +165,7 @@
                     </div>
                     <div class="col">
                         <label for="tipos">Tipo:</label>
-                        <select class="form-control" name="tipos[]" required>
-                            <option value="INT">INT</option>
-                            <option value="INT PRIMARY KEY">INT PRIMARY KEY</option>
-                            <option value="VARCHAR(255)">VARCHAR(255)</option>
-                            <option value="TEXT">TEXT</option>
-                            <option value="DATE">DATE</option>
-                            <option value="DATETIME">DATETIME</option>
-                            <option value="FLOAT">FLOAT</option>
-                            <option value="DOUBLE">DOUBLE</option>
-                            <option value="DECIMAL">DECIMAL</option>
-                            <option value="BOOL">BOOL</option>
-                            <option value="TINYINT">TINYINT</option>
-                            <option value="SMALLINT">SMALLINT</option>
-                            <option value="MEDIUMINT">MEDIUMINT</option>
-                            <option value="BIGINT">BIGINT</option>
-                            <option value="ENUM('value1', 'value2', ...)">ENUM</option>
-                        </select>
+                        <?php echo SelectOptions('tipos[]'); ?>
                     </div>
                     <div class="col">
                         <label for="nullos">Vazio:    </label>
@@ -226,6 +176,11 @@
         `;
             container.append(novoCampo);
         }
+
+        document.getElementById('tipoArquivo').addEventListener('change', function () {
+            const nomeBancoContainer = document.getElementById('nomeBancoContainer');
+            nomeBancoContainer.style.display = this.value === 'python' ? 'block' : 'none';
+        });
     </script>
 
 </body>

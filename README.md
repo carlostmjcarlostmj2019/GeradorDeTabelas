@@ -36,7 +36,7 @@ O **Gerador de Tabelas** é uma ferramenta desenvolvida em PHP que permite criar
 
 ### Como Utilizar
 
-1. Acesse a aplicação web.
+1. Acesse a aplicação web, (Update > e insira a configuraçao do banco de dados na opçao da navbar)
 2. Insira o nome da tabela.
 3. Escolha o tipo de arquivo (PHP, SQL ou Python).
 4. Adicione os campos da tabela, informando nome, tipo e se é permitido ser nulo.
@@ -55,8 +55,9 @@ O **Gerador de Tabelas** é uma ferramenta desenvolvida em PHP que permite criar
 ### Estrutura do Projeto
 
 - `Tabelas.php`: Página principal da aplicação.
+- `tabelas_config.php`: Configuraçoes PHP para geração de scripts.
 - `tabelas_functions.php`: Funções PHP para geração de scripts.
-- `tabelas/`: Diretório onde os scripts gerados serão salvos.
+- `saida/`: Diretório onde os scripts gerados serão salvos.
 
 ### Autor
 
